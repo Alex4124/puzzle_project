@@ -6,6 +6,7 @@ import { IntroScene } from '@scenes/IntroScene';
 import { GameScene } from '@scenes/GameScene';
 import { PackshotScene } from '@scenes/PackshotScene';
 import { GameConfig } from '@models/GameConfig';
+import { LogoOverlay } from '@controllers/LogoOverlay';
 
 /**
  * Главный класс приложения
@@ -15,6 +16,7 @@ export class GameApplication {
   private responsiveManager!: ResponsiveManager;
   private sceneManager!: SceneManager;
   private sceneContainer!: Container;
+  private logoOverlay!: LogoOverlay;
 
   /**
    * Инициализация приложения
@@ -64,6 +66,9 @@ export class GameApplication {
       if (this.sceneManager) {
         this.sceneManager.resize(dimensions);
       }
+      if (this.logoOverlay) {
+        this.logoOverlay.resize(dimensions);
+      }
     });
 
     console.log('✅ Responsive manager initialized');
@@ -108,6 +113,13 @@ export class GameApplication {
     this.sceneManager.addScene(GameConfig.SCENE_INTRO, introScene);
     this.sceneManager.addScene(GameConfig.SCENE_GAME, gameScene);
     this.sceneManager.addScene(GameConfig.SCENE_PACKSHOT, packshotScene);
+
+    // Постоянный слой логотипа поверх сцен
+    this.logoOverlay = new LogoOverlay();
+    this.app.stage.addChild(this.logoOverlay);
+
+    // Применим начальные размеры для оверлея
+    this.logoOverlay.resize(this.responsiveManager.getDimensions());
 
     console.log('✅ Scenes created');
   }

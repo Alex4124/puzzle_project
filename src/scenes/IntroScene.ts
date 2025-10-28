@@ -8,7 +8,6 @@ import { SceneManager } from './SceneManager';
 
 export class IntroScene extends Scene {
   private background!: Graphics;
-  private logo!: Sprite;
   private titleText!: Text;
   private startButton!: Container;
   private buttonController!: ButtonController;
@@ -23,7 +22,6 @@ export class IntroScene extends Scene {
 
   public async init(): Promise<void> {
     this.createBackground();
-    this.createLogo();
     this.createTitle();
     this.createStartButton();
 
@@ -40,68 +38,6 @@ export class IntroScene extends Scene {
     this.background.drawRect(0, 0, 100, 100);
     this.background.endFill();
     this.addChild(this.background);
-  }
-
-  /**
-   * Создание логотипа
-   * Если у вас есть изображение логотипа - замените Graphics на Sprite
-   */
-  private createLogo(): void {
-    const assetManager = AssetManager.getInstance();
-
-    // Проверяем, загружен ли ассет логотипа
-    if (assetManager.hasAsset(GameConfig.ASSET_LOGO)) {
-      const texture = assetManager.getAsset<Texture>(GameConfig.ASSET_LOGO);
-      this.logo = new Sprite(texture);
-    } else {
-      // Временный placeholder если нет ассета
-      this.logo = this.createLogoPlaceholder();
-    }
-
-    this.logo.anchor.set(0, 0);
-    this.addChild(this.logo);
-  }
-
-  /**
-   * Создание временного placeholder'а для логотипа
-   */
-  private createLogoPlaceholder(): Sprite {
-    const graphics = new Graphics();
-    
-    // Внешняя синяя область
-    graphics.beginFill(0x1E88E5);
-    graphics.drawRoundedRect(0, 0, 200, 80, 15);
-    graphics.endFill();
-
-    // Оранжевая деталь пазла слева
-    graphics.beginFill(0xFF9800);
-    graphics.moveTo(20, 20);
-    graphics.lineTo(50, 20);
-    graphics.lineTo(55, 15);
-    graphics.lineTo(60, 20);
-    graphics.lineTo(60, 50);
-    graphics.lineTo(55, 55);
-    graphics.lineTo(50, 50);
-    graphics.lineTo(20, 50);
-    graphics.lineTo(20, 20);
-    graphics.endFill();
-
-    // Текст "MAGIC JIGSAW PUZZLES"
-    const style = new TextStyle({
-      fontFamily: 'Arial, sans-serif',
-      fontSize: 16,
-      fontWeight: 'bold',
-      fill: 0xFFFFFF,
-    });
-    const text = new Text('MAGIC\nJIGSAW\nPUZZLES', style);
-    text.position.set(75, 15);
-
-    const container = new Container();
-    container.addChild(graphics, text);
-
-    // Конвертируем в текстуру для использования как Sprite
-    const texture = this.app.renderer.generateTexture(container);
-    return new Sprite(texture);
   }
 
   /**
@@ -224,11 +160,6 @@ export class IntroScene extends Scene {
     this.background.beginFill(GameConfig.BACKGROUND_COLOR);
     this.background.drawRect(0, 0, width, height);
     this.background.endFill();
-
-    // Логотип в левом верхнем углу
-    const logoScale = Math.min(width / 1080, height / 1920) * 0.8;
-    this.logo.scale.set(logoScale);
-    this.logo.position.set(0, 20);
 
     // Заголовок в центре экрана (чуть выше середины)
     const titleScale = Math.min(width / 1080, height / 1920);
