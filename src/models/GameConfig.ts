@@ -20,6 +20,10 @@ export class GameConfig {
   public static readonly ASSET_LOGO = 'logo';
   public static readonly ASSET_START_BUTTON = 'start_button';
   
+  // Puzzle assets
+  public static readonly ASSET_PUZZLE_COMPLETE = 'puzzle_complete';
+  public static readonly ASSET_PUZZLE_TILE_PREFIX = 'puzzle_tile_';
+  
   // Вы можете добавить свои ассеты здесь:
   // public static readonly ASSET_YOUR_IMAGE = 'your_image';
 }
