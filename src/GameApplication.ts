@@ -83,21 +83,25 @@ export class GameApplication {
 
     // Список ассетов для загрузки
     const assetsList: AssetConfig[] = [
-      // Раскомментируйте и добавьте свои ассеты:
+      // Основные ассеты UI
       { name: GameConfig.ASSET_LOGO, path: '/assets/images/logo.png' },
       { name: GameConfig.ASSET_START_BUTTON, path: '/assets/images/start_button.png' },
       { name: GameConfig.ASSET_BACKGROUND, path: '/assets/images/background.jpg' },
-      // Полное изображение пазла
+      
+      // Полное изображение пазла (будет автоматически нарезано на тайлы)
       { name: GameConfig.ASSET_PUZZLE_COMPLETE, path: '/assets/images/fox_complete.png' },
     ];
 
-    // 16 тайлов пазла (4x4)
+    // ОПЦИОНАЛЬНО: Если у вас есть отдельные тайлы пазла, раскомментируйте этот блок
+    // GameScene автоматически определит, что использовать - отдельные тайлы или разрезанное изображение
+    /*
     for (let i = 1; i <= 16; i++) {
       assetsList.push({
         name: `${GameConfig.ASSET_PUZZLE_TILE_PREFIX}${i}`,
         path: `/assets/images/puzzles/Puzzle_${i}.png`,
       });
     }
+    */
 
     if (assetsList.length > 0) {
       await assetManager.loadAssets(assetsList);

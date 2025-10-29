@@ -1,4 +1,4 @@
-import { Container, FederatedPointerEvent, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Container, FederatedPointerEvent, Graphics, RenderTexture, Sprite, Texture } from 'pixi.js';
 import { Scene } from './Scene';
 import { GameDimensions } from '@utils/ResponsiveManager';
 import { GameConfig } from '@models/GameConfig';
@@ -28,6 +28,7 @@ interface TileData {
  * Игровая сцена: пазл 4x4
  * - 4 случайных детали отсутствуют и лежат слева
  * - На местах отсутствующих деталей — серый силуэт
+ * - Может работать как с отдельными ассетами тайлов, так и разрезать целое изображение
  */
 export class GameScene extends Scene {
   private background!: Graphics;
@@ -74,8 +75,103 @@ export class GameScene extends Scene {
     this.addChild(this.background);
   }
 
-  private setupPuzzle(): void {
+  /**
+   * Создание текстур тайлов
+   * Если есть отдельные ассеты - использует их
+   * Если нет - разрезает полное изображение
+   */
+  private createTileTextures(): Texture[] {
     const assetManager = AssetManager.getInstance();
+    const textures: Texture[] = [];
+
+    // Проверяем, есть ли отдельные тайлы
+    const hasIndividualTiles = assetManager.hasAsset(`${GameConfig.ASSET_PUZZLE_TILE_PREFIX}1`);
+
+    if (hasIndividualTiles) {
+      // Используем готовые тайлы
+      for (let i = 0; i < this.GRID_SIZE * this.GRID_SIZE; i++) {
+        const texName = `${GameConfig.ASSET_PUZZLE_TILE_PREFIX}${i + 1}`;
+        textures.push(assetManager.getAsset<Texture>(texName));
+      }
+      console.log('✅ Using individual tile assets');
+    } else if (assetManager.hasAsset(GameConfig.ASSET_PUZZLE_COMPLETE)) {
+      // Разрезаем полное изображение
+      const completeTexture = assetManager.getAsset<Texture>(GameConfig.ASSET_PUZZLE_COMPLETE);
+      const tileWidth = completeTexture.width / this.GRID_SIZE;
+      const tileHeight = completeTexture.height / this.GRID_SIZE;
+
+      for (let i = 0; i < this.GRID_SIZE * this.GRID_SIZE; i++) {
+        const row = Math.floor(i / this.GRID_SIZE);
+        const col = i % this.GRID_SIZE;
+
+        // Создаём текстуру из части полного изображения
+        const rect = {
+          x: col * tileWidth,
+          y: row * tileHeight,
+          width: tileWidth,
+          height: tileHeight,
+        };
+
+        const tileTexture = new Texture(
+          completeTexture.baseTexture,
+          rect as any
+        );
+        textures.push(tileTexture);
+      }
+      console.log('✅ Sliced complete image into tiles');
+    } else {
+      // Создаём placeholder тайлы
+      console.warn('⚠️ No puzzle assets found, creating placeholders');
+      for (let i = 0; i < this.GRID_SIZE * this.GRID_SIZE; i++) {
+        textures.push(this.createPlaceholderTexture(i));
+      }
+    }
+
+    return textures;
+  }
+
+  /**
+   * Создание placeholder текстуры для тайла
+   */
+  private createPlaceholderTexture(index: number): Texture {
+    const size = 200;
+    const graphics = new Graphics();
+    
+    // Случайный цвет для каждого тайла
+    const hue = (index * 360) / (this.GRID_SIZE * this.GRID_SIZE);
+    const color = this.hslToHex(hue, 70, 60);
+    
+    graphics.beginFill(color);
+    graphics.drawRect(0, 0, size, size);
+    graphics.endFill();
+    
+    // Граница
+    graphics.lineStyle(4, 0xFFFFFF);
+    graphics.drawRect(0, 0, size, size);
+    
+    // Номер тайла
+    graphics.endFill();
+
+    return this.app.renderer.generateTexture(graphics);
+  }
+
+  /**
+   * HSL to HEX конверсия для цветов
+   */
+  private hslToHex(h: number, s: number, l: number): number {
+    s /= 100;
+    l /= 100;
+    const k = (n: number) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const r = Math.round(255 * f(0));
+    const g = Math.round(255 * f(8));
+    const b = Math.round(255 * f(4));
+    return (r << 16) + (g << 8) + b;
+  }
+
+  private setupPuzzle(): void {
+    const tileTextures = this.createTileTextures();
 
     // Выбираем 4 уникальных случайных индекса от 0 до 15
     const indices = Array.from({ length: this.GRID_SIZE * this.GRID_SIZE }, (_, i) => i);
@@ -86,8 +182,7 @@ export class GameScene extends Scene {
     for (let i = 0; i < this.GRID_SIZE * this.GRID_SIZE; i++) {
       const row = Math.floor(i / this.GRID_SIZE);
       const col = i % this.GRID_SIZE;
-      const texName = `${GameConfig.ASSET_PUZZLE_TILE_PREFIX}${i + 1}`;
-      const texture = assetManager.getAsset<Texture>(texName);
+      const texture = tileTextures[i];
 
       const container = new Container();
       const sprite = new Sprite(texture);
@@ -281,7 +376,7 @@ export class GameScene extends Scene {
     // Отключаем взаимодействия
     this.tiles.forEach(t => (t.container.eventMode = 'none'));
 
-    // Небольшой “поп” и затем затемнение сцены
+    // Небольшой "поп" и затем затемнение сцены
     const tl = gsap.timeline({
       defaults: { ease: 'power2.out' },
       onComplete: async () => {
@@ -294,5 +389,13 @@ export class GameScene extends Scene {
       .to(this.tilesContainer.scale, { x: 1.05, y: 1.05, duration: 0.15 })
       .to(this.tilesContainer.scale, { x: 1.0, y: 1.0, duration: 0.15 })
       .to(this, { alpha: 0, duration: 0.35, ease: 'power1.inOut' }, '>-0.05');
+  }
+
+  /**
+   * Доступ к app.renderer для создания текстур
+   */
+  private get app() {
+    // Получаем renderer из текущей stage
+    return this.parent?.parent as any;
   }
 }
