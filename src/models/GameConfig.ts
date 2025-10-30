@@ -19,6 +19,8 @@ export class GameConfig {
   public static readonly ASSET_BACKGROUND = 'background';
   public static readonly ASSET_LOGO = 'logo';
   public static readonly ASSET_START_BUTTON = 'start_button';
+  public static readonly ASSET_PLAY_BUTTON = 'play_button';
+  public static readonly ASSET_HAND = 'hand';
   
   // Puzzle assets
   public static readonly ASSET_PUZZLE_COMPLETE = 'puzzle_complete';
@@ -26,4 +28,8 @@ export class GameConfig {
   
   // Вы можете добавить свои ассеты здесь:
   // public static readonly ASSET_YOUR_IMAGE = 'your_image';
+
+  // Ссылки на магазины (обновите при необходимости)
+  public static readonly ANDROID_GAME_URL = 'https://play.google.com/store/apps/details?id=com.bandagames.mpuzzle.gp';
+  public static readonly IOS_GAME_URL = 'https://apps.apple.com/app/id439873467';
 }

@@ -86,6 +86,8 @@ export class GameApplication {
       // Основные ассеты UI
       { name: GameConfig.ASSET_LOGO, path: '/assets/images/logo.png' },
       { name: GameConfig.ASSET_START_BUTTON, path: '/assets/images/start_button.png' },
+      { name: GameConfig.ASSET_PLAY_BUTTON, path: '/assets/images/play_button.png' },
+      { name: GameConfig.ASSET_HAND, path: '/assets/images/hand.png' },
       { name: GameConfig.ASSET_BACKGROUND, path: '/assets/images/background.jpg' },
       
       // Полное изображение пазла (будет автоматически нарезано на тайлы)

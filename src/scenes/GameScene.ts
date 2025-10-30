@@ -1,10 +1,11 @@
-import { Container, FederatedPointerEvent, Graphics, RenderTexture, Sprite, Texture, BlurFilter, Point, BLEND_MODES } from 'pixi.js';
+import { Container, FederatedPointerEvent, Graphics, RenderTexture, Sprite, Texture, BlurFilter, Point, BLEND_MODES, Text, TextStyle } from 'pixi.js';
 import { Scene } from './Scene';
 import { GameDimensions } from '@utils/ResponsiveManager';
 import { GameConfig } from '@models/GameConfig';
 import { AssetManager } from '@utils/AssetManager';
 import gsap from 'gsap';
 import { SceneManager } from './SceneManager';
+import { ButtonController } from '@controllers/ButtonController';
 
 interface TileData {
   index: number;
@@ -38,13 +39,31 @@ export class GameScene extends Scene {
   private leftPanelContent!: Container;
   private contentContainer!: Container;
   private readonly LEFT_TILE_MAX_W = 145;
-  private readonly LEFT_TILE_MAX_H = 175;
+  private readonly LEFT_TILE_MAX_H = 120;
   private readonly LEFT_PANEL_MAX_W = 780;
-  private readonly LEFT_PANEL_MAX_H = 225;
+  private readonly LEFT_PANEL_MAX_H = 180;
   private leftPanelBg!: Graphics;
   private leftPanelShadow!: Graphics;
   private leftPanelMask!: Graphics;
   private leftPanelHeight = 0;
+  private readonly PLAY_BUTTON_MAX_WIDTH = 250;
+  private readonly PLAY_BUTTON_MAX_HEIGHT = 175;
+  private readonly HAND_FADE_IN = 0.8;
+  private readonly HAND_MOVE = 1.5;
+  private readonly HAND_FADE_OUT = 0.8;
+  private readonly HAND_REPEAT_DELAY = 0.6;
+  private readonly HAND_TARGET_MAX_HEIGHT = 140; // было 120, чуть больше
+  private readonly HAND_TILE_FACTOR = 1.0; // было 0.8, делаем крупнее относительно тайла
+  private readonly HAND_MAX_SCALE = 1.35; // лимит на общий масштаб
+  private readonly HAND_MIN_SCALE = 0.75;
+  private headingText!: Text;
+  private playButton!: Container;
+  private playButtonController?: ButtonController;
+  private playButtonBaseWidth = 1;
+  private playButtonBaseHeight = 1;
+  private handSprite?: Sprite;
+  private handTimeline?: gsap.core.Timeline;
+  private userTouchedTiles = false;
 
   private readonly GRID_SIZE = 4;
   private tiles: TileData[] = [];
@@ -89,8 +108,105 @@ export class GameScene extends Scene {
     this.contentContainer.addChild(this.ghostContainer);
     this.contentContainer.addChild(this.tilesContainer);
 
+    // Подсказка рукой (добавим до UI, чтобы UI был поверх)
+    this.createHand();
+
+    // UI: заголовок над панелью и кнопка под панелью
+    this.createHeading();
+    this.createPlayButton();
+
     this.setupPuzzle();
     this.resize(this.dimensions);
+  }
+
+  private createHand(): void {
+    const assetManager = AssetManager.getInstance();
+    if (!assetManager.hasAsset(GameConfig.ASSET_HAND)) return;
+    const tex = assetManager.getAsset<Texture>(GameConfig.ASSET_HAND);
+    const hand = new Sprite(tex);
+    hand.anchor.set(0.2);
+    hand.alpha = 0;
+    (hand as any).eventMode = 'none';
+    this.contentContainer.addChild(hand);
+    this.handSprite = hand;
+  }
+
+  private createHeading(): void {
+    const style = new TextStyle({
+      fontFamily: 'S FRounded',
+      fontSize: 60,
+      fontWeight: '800',
+      fill: 0x944215,
+      align: 'center',
+    });
+    this.headingText = new Text('Complete the puzzle', style);
+    this.headingText.anchor.set(0.5);
+    this.contentContainer.addChild(this.headingText);
+  }
+
+  private createPlayButton(): void {
+    this.playButton = new Container();
+
+    const assetManager = AssetManager.getInstance();
+    if (assetManager.hasAsset(GameConfig.ASSET_PLAY_BUTTON)) {
+      const tex = assetManager.getAsset<Texture>(GameConfig.ASSET_PLAY_BUTTON);
+      const sprite = new Sprite(tex);
+      sprite.anchor.set(0.5);
+      this.playButton.addChild(sprite);
+      this.playButtonBaseWidth = sprite.width || 1;
+      this.playButtonBaseHeight = sprite.height || 1;
+    } else {
+      // Fallback: простая кнопка-плейсхолдер
+      const bg = new Graphics();
+      bg.beginFill(0x4CAF50);
+      bg.drawRoundedRect(-180, -55, 360, 110, 28);
+      bg.endFill();
+      const textStyle = new TextStyle({
+        fontFamily: 'S FRounded',
+        fontSize: 48,
+        fontWeight: '600',
+        fill: 0xffffff,
+        align: 'center',
+      });
+      const t = new Text('Play', textStyle);
+      t.anchor.set(0.5);
+      this.playButton.addChild(bg, t);
+      const bounds = this.playButton.getLocalBounds();
+      this.playButtonBaseWidth = bounds.width || 1;
+      this.playButtonBaseHeight = bounds.height || 1;
+    }
+
+    this.contentContainer.addChild(this.playButton);
+    this.playButtonController = new ButtonController(this.playButton, {
+      onPress: () => this.navigateToStore(),
+      enablePulse: false,
+      scale: 1,
+    });
+  }
+
+  private navigateToStore(): void {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+    const isAndroid = /Android/.test(ua);
+
+    let url = '';
+    if (isIOS) {
+      url = GameConfig.IOS_GAME_URL;
+    } else if (isAndroid) {
+      url = GameConfig.ANDROID_GAME_URL;
+    }
+
+    if (!url) {
+      console.warn('Store URL is not configured for this platform');
+      return;
+    }
+
+    try {
+      window.open(url, '_blank');
+    } catch (e) {
+      // Fallback
+      (window as any).location.href = url;
+    }
   }
 
   private createBackground(): void {
@@ -298,6 +414,10 @@ export class GameScene extends Scene {
     tile.container.cursor = 'pointer';
 
     const onDown = (e: FederatedPointerEvent) => {
+      if (!this.userTouchedTiles) {
+        this.userTouchedTiles = true;
+        this.stopHandGuide();
+      }
       tile.dragging = true;
       // Переместим тайл к контейнеру тайлов, сохранив мировую позицию (чтобы не "прыгнул")
       const world = tile.container.getGlobalPosition(new Point());
@@ -405,7 +525,14 @@ export class GameScene extends Scene {
     this.tileSize = tileSize;
     this.leftPanelWidth = leftPanelWidth;
     // Высота панели и ее позиция по Y (центрируем относительно пазла)
-    this.leftPanelHeight = Math.min(this.LEFT_PANEL_MAX_H, puzzleSize);
+    // В портретной ориентации уменьшаем высоту панели до фактической высоты тайлов + отступы
+    const scaledHeightForPanel = tileSize * leftTileScale;
+    let computedLeftPanelHeight = Math.min(this.LEFT_PANEL_MAX_H, puzzleSize);
+    if (height > width) {
+      const desired = Math.max(0, Math.round(scaledHeightForPanel + this.margin * 2));
+      computedLeftPanelHeight = Math.min(computedLeftPanelHeight, desired);
+    }
+    this.leftPanelHeight = computedLeftPanelHeight;
     const panelY = (puzzleSize - this.leftPanelHeight) / 2;
     this.leftPanel.position.set(0, panelY);
     // Внутри contentContainer начало по Y = 0, пазл смещаем по X после левой панели
@@ -470,9 +597,40 @@ export class GameScene extends Scene {
       }
     });
 
+    // Позиционирование заголовка и кнопки относительно левой панели
+    const panelTop = this.leftPanel.y; // относительно contentContainer (пазл начинается с 0 по Y)
+    const panelBottom = this.leftPanel.y + this.leftPanelHeight;
+
+    // Кнопка: адаптивный масштаб (с учётом ширины панели и ограничений)
+    const buttonScale = this.calculatePlayButtonScale(dimensions);
+    if (this.playButtonController) {
+      this.playButtonController.setBaseScale(buttonScale);
+    } else {
+      this.playButton.scale.set(buttonScale);
+    }
+    const buttonHeight = this.playButtonBaseHeight * (this.playButton.scale.y || buttonScale);
+    this.playButton.position.set(this.leftPanelWidth / 2, panelBottom + 50 + buttonHeight / 2);
+
+    // Заголовок: базовый стиль, адаптивный масштаб по ширине панели и доступной высоте
+    const localHeadingWidth = this.headingText.getLocalBounds().width || 1;
+    const localHeadingHeight = this.headingText.getLocalBounds().height || 1;
+    const maxHeadingWidth = Math.max(1, this.leftPanelWidth - this.margin * 2);
+    const widthScale = Math.min(1, maxHeadingWidth / localHeadingWidth);
+    const maxHeadingHeight = Math.max(1, panelTop - 50);
+    const heightScale = Math.min(1, maxHeadingHeight / localHeadingHeight);
+    const headingScale = Math.max(0.2, Math.min(widthScale, heightScale));
+    this.headingText.scale.set(headingScale);
+    const headingHeight = localHeadingHeight * headingScale;
+    this.headingText.position.set(this.leftPanelWidth / 2, panelTop - 50 - headingHeight / 2);
+
     // Центрирование и масштабирование основного контейнера
     const contentWidth = this.leftPanelWidth + this.margin + this.puzzleSize;
-    const contentHeight = this.puzzleSize;
+    // Учтём заголовок сверху и кнопку снизу вне области пазла
+    const labelTop = this.headingText.position.y - this.headingText.height / 2;
+    const topExtent = Math.max(0, -labelTop);
+    const buttonBottom = this.playButton.position.y + (buttonHeight / 2);
+    const bottomExtent = Math.max(0, buttonBottom - this.puzzleSize);
+    const contentHeight = this.puzzleSize + topExtent + bottomExtent;
     const fitScale = Math.min(width / contentWidth, height / contentHeight);
     const desiredScale = Math.min(1, fitScale) * 0.9; // немного уменьшаем масштаб
     this.contentContainer.scale.set(desiredScale);
@@ -480,6 +638,9 @@ export class GameScene extends Scene {
       (width - contentWidth * desiredScale) / 2,
       (height - contentHeight * desiredScale) / 2
     );
+
+    // Обновим/запустим подсказку рукой, если пользователь ещё не взаимодействовал
+    this.refreshHandGuide();
   }
 
   private shuffle<T>(arr: T[]): void {
@@ -498,6 +659,7 @@ export class GameScene extends Scene {
   }
 
   private onPuzzleCompleted(): void {
+    this.stopHandGuide();
     this.isTransitioning = true;
 
     // Отключаем взаимодействия
@@ -568,5 +730,68 @@ export class GameScene extends Scene {
     this.leftPanelShadow.filters = [new BlurFilter(5)];
     this.leftPanelShadow.blendMode = BLEND_MODES.MULTIPLY;
     this.leftPanelShadow.mask = this.leftPanelMask; // обрезаем по форме панели
+  }
+
+  private calculatePlayButtonScale(dimensions: GameDimensions): number {
+    const baseW = this.playButtonBaseWidth || 1;
+    const baseH = this.playButtonBaseHeight || 1;
+    // Целевой размер: до 387x175, но не шире панели
+    const widthLimit = (this.leftPanelWidth - this.margin * 2) / baseW;
+    const explicitMaxWidthLimit = this.PLAY_BUTTON_MAX_WIDTH / baseW; // 387
+    const heightLimit = this.PLAY_BUTTON_MAX_HEIGHT / baseH; // 175
+    const scale = Math.min(widthLimit, explicitMaxWidthLimit, heightLimit);
+    return Math.max(0.2, isFinite(scale) && scale > 0 ? scale : 1);
+  }
+
+  private refreshHandGuide(): void {
+    if (!this.handSprite) return;
+    if (this.userTouchedTiles) {
+      this.stopHandGuide();
+      return;
+    }
+    const tile = this.tiles.find(t => !t.placed && !t.dragging);
+    if (!tile) {
+      this.stopHandGuide();
+      return;
+    }
+
+    // Старт: точный центр спрайта тайла в левой панели (учитывает масштаб контейнера)
+    const globalCenter = tile.container.toGlobal(new Point(tile.image.width / 2, tile.image.height / 2));
+    const localCenter = this.contentContainer.toLocal(globalCenter);
+    const startX = localCenter.x;
+    const startY = localCenter.y;
+    const endX = tile.targetX + this.tileSize / 2;
+    const endY = tile.targetY + this.tileSize / 2;
+
+    // Масштаб руки относительно размера тайла (слегка увеличен)
+    const baseH = this.handSprite.texture.height || 1;
+    const desiredH = Math.min(this.HAND_TARGET_MAX_HEIGHT, this.tileSize * this.HAND_TILE_FACTOR);
+    const handScale = Math.max(this.HAND_MIN_SCALE, Math.min(this.HAND_MAX_SCALE, desiredH / baseH));
+    this.handSprite.scale.set(handScale);
+
+    // Перезапустим анимацию
+    if (this.handTimeline) {
+      this.handTimeline.kill();
+      this.handTimeline = undefined;
+    }
+    this.handSprite.alpha = 0;
+    this.handSprite.position.set(startX, startY);
+
+    this.handTimeline = gsap.timeline({ repeat: -1, repeatDelay: this.HAND_REPEAT_DELAY, defaults: { ease: 'power2.out' } });
+    this.handTimeline
+      .to(this.handSprite, { alpha: 1, duration: this.HAND_FADE_IN })
+      .to(this.handSprite, { x: endX, y: endY, duration: this.HAND_MOVE, ease: 'power2.inOut' })
+      .to(this.handSprite, { alpha: 0, duration: this.HAND_FADE_OUT })
+      .add(() => {
+        this.handSprite!.position.set(startX, startY);
+      });
+  }
+
+  private stopHandGuide(): void {
+    if (this.handTimeline) {
+      this.handTimeline.kill();
+      this.handTimeline = undefined;
+    }
+    if (this.handSprite) this.handSprite.alpha = 0;
   }
 }
