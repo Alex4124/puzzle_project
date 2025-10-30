@@ -6,6 +6,8 @@ export interface ButtonConfig {
   scale?: number;
   enableHover?: boolean;
   enablePulse?: boolean;
+  pulseFactor?: number; // how strong the pulse is (e.g., 1.3 means +30%)
+  pulseDuration?: number; // seconds for one half-cycle
 }
 
 /**
@@ -116,10 +118,12 @@ export class ButtonController {
    * Запуск анимации пульсации
    */
   private startPulse(): void {
+    const factor = this.config.pulseFactor ?? 1.1;
+    const duration = this.config.pulseDuration ?? 1;
     this.pulseAnimation = gsap.to(this.container.scale, {
-      x: this.originalScale * 1.1,
-      y: this.originalScale * 1.1,
-      duration: 1,
+      x: this.originalScale * factor,
+      y: this.originalScale * factor,
+      duration,
       ease: 'sine.inOut',
       repeat: -1,
       yoyo: true,

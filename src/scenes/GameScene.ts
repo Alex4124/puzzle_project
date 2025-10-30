@@ -662,22 +662,30 @@ export class GameScene extends Scene {
     this.stopHandGuide();
     this.isTransitioning = true;
 
-    // Отключаем взаимодействия
+    // Отключаем взаимодействия с тайлами
     this.tiles.forEach(t => (t.container.eventMode = 'none'));
 
-    // Небольшой "поп" и затем затемнение сцены
-    const tl = gsap.timeline({
-      defaults: { ease: 'power2.out' },
-      onComplete: async () => {
+    // Рассчитаем центр пазла в координатах contentContainer
+    const { width, height } = this.dimensions;
+    const puzzleSize = this.puzzleSize;
+    const fitScale = Math.min(width / puzzleSize, height / puzzleSize);
+    const targetScale = Math.min(1, fitScale) * 0.95;
+    const puzzleCenterX = this.puzzleOriginX + puzzleSize / 2;
+    const puzzleCenterY = this.puzzleOriginY + puzzleSize / 2;
+    const targetX = width / 2 - puzzleCenterX * targetScale;
+    const targetY = height / 2 - puzzleCenterY * targetScale;
+
+    // Анимация: плавно скрываем левую панель и UI, центрируем собранный пазл
+    const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
+    tl.to(this.ghostContainer, { alpha: 0, duration: 0.25 }, 0)
+      .to([this.headingText, this.playButton], { alpha: 0, duration: 0.3 }, 0)
+      .to(this.leftPanel, { alpha: 0, duration: 0.4 }, 0)
+      .to(this.contentContainer.scale, { x: targetScale, y: targetScale, duration: 0.7, ease: 'power2.inOut' }, 0)
+      .to(this.contentContainer, { x: targetX, y: targetY, duration: 0.7, ease: 'power2.inOut' }, 0)
+      .add(async () => {
         const sceneManager = SceneManager.getInstance();
         await sceneManager.switchTo(GameConfig.SCENE_PACKSHOT);
-      },
-    });
-
-    tl.to(this.ghostContainer, { alpha: 0, duration: 0.2 })
-      .to(this.tilesContainer.scale, { x: 1.05, y: 1.05, duration: 0.15 })
-      .to(this.tilesContainer.scale, { x: 1.0, y: 1.0, duration: 0.15 })
-      .to(this, { alpha: 0, duration: 0.35, ease: 'power1.inOut' }, '>-0.05');
+      });
   }
 
   /**
