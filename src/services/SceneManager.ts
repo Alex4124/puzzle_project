@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js';
-import { Scene } from './Scene';
-import { GameDimensions } from '@utils/ResponsiveManager';
+import { Scene } from '@views/scenes/Scene';
+import { GameDimensions } from '@services/ResponsiveManager';
 
 export class SceneManager {
   private static instance: SceneManager;

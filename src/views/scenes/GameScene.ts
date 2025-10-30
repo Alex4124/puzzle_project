@@ -1,10 +1,10 @@
 import { Container, FederatedPointerEvent, Graphics, RenderTexture, Sprite, Texture, BlurFilter, Point, BLEND_MODES, Text, TextStyle } from 'pixi.js';
 import { Scene } from './Scene';
-import { GameDimensions } from '@utils/ResponsiveManager';
+import { GameDimensions } from '@services/ResponsiveManager';
 import { GameConfig } from '@models/GameConfig';
-import { AssetManager } from '@utils/AssetManager';
+import { AssetManager } from '@services/AssetManager';
 import gsap from 'gsap';
-import { SceneManager } from './SceneManager';
+import { SceneManager } from '@services/SceneManager';
 import { ButtonController } from '@controllers/ButtonController';
 
 interface TileData {
@@ -490,12 +490,18 @@ export class GameScene extends Scene {
   }
 
   protected onResize(dimensions: GameDimensions): void {
-    const { width, height } = dimensions;
+    const fullWidth = dimensions.width;
+    const fullHeight = dimensions.height;
+    const safe = (dimensions as any).safe;
+    const width = safe ? safe.width : fullWidth;
+    const height = safe ? safe.height : fullHeight;
+    const offsetX = safe ? safe.x : 0;
+    const offsetY = safe ? safe.y : 0;
 
     // Фон на весь экран
     this.background.clear();
     this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, width, height);
+    this.background.drawRect(0, 0, fullWidth, fullHeight);
     this.background.endFill();
 
     // Адаптивный лэйаут
@@ -635,8 +641,8 @@ export class GameScene extends Scene {
     const desiredScale = Math.min(1, fitScale) * 0.9; // немного уменьшаем масштаб
     this.contentContainer.scale.set(desiredScale);
     this.contentContainer.position.set(
-      (width - contentWidth * desiredScale) / 2,
-      (height - contentHeight * desiredScale) / 2
+      (width - contentWidth * desiredScale) / 2 + offsetX,
+      (height - contentHeight * desiredScale) / 2 + offsetY
     );
 
     // Обновим/запустим подсказку рукой, если пользователь ещё не взаимодействовал
@@ -666,14 +672,19 @@ export class GameScene extends Scene {
     this.tiles.forEach(t => (t.container.eventMode = 'none'));
 
     // Рассчитаем центр пазла в координатах contentContainer
-    const { width, height } = this.dimensions;
+    const dims: any = this.dimensions as any;
+    const safe = dims.safe;
+    const width = safe ? safe.width : dims.width;
+    const height = safe ? safe.height : dims.height;
+    const offsetX = safe ? safe.x : 0;
+    const offsetY = safe ? safe.y : 0;
     const puzzleSize = this.puzzleSize;
     const fitScale = Math.min(width / puzzleSize, height / puzzleSize);
     const targetScale = Math.min(1, fitScale) * 0.95;
     const puzzleCenterX = this.puzzleOriginX + puzzleSize / 2;
     const puzzleCenterY = this.puzzleOriginY + puzzleSize / 2;
-    const targetX = width / 2 - puzzleCenterX * targetScale;
-    const targetY = height / 2 - puzzleCenterY * targetScale;
+    const targetX = offsetX + width / 2 - puzzleCenterX * targetScale;
+    const targetY = offsetY + height / 2 - puzzleCenterY * targetScale;
 
     // Анимация: плавно скрываем левую панель и UI, центрируем собранный пазл
     const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });

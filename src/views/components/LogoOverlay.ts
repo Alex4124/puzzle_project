@@ -1,7 +1,7 @@
 import { Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
-import { AssetManager } from '@utils/AssetManager';
+import { AssetManager } from '@services/AssetManager';
 import { GameConfig } from '@models/GameConfig';
-import { GameDimensions } from '@utils/ResponsiveManager';
+import { GameDimensions } from '@services/ResponsiveManager';
 
 /**
  * Постоянный слой с логотипом, располагается поверх всех сцен
@@ -84,11 +84,15 @@ export class LogoOverlay extends Container {
    * Обновление позиции/масштаба логотипа при ресайзе
    */
   public resize(dimensions: GameDimensions): void {
-    const { width, height } = dimensions;
-    const scale = Math.min(width / 1080, height / 1920) * 0.8;
+    const safe = (dimensions as any).safe;
+    const width = safe ? safe.width : dimensions.width;
+    const height = safe ? safe.height : dimensions.height;
+    const offsetX = safe ? safe.x : 0;
+    const offsetY = safe ? safe.y : 0;
+    const scale = Math.min(width / GameConfig.DESIGN_WIDTH, height / GameConfig.DESIGN_HEIGHT) * 1.2;
 
     this.logoHolder.scale.set(scale);
-    this.position.set(0, 20);
+    this.position.set(offsetX + 10, offsetY + 10);
   }
 
   public dispose(): void {
@@ -97,4 +101,3 @@ export class LogoOverlay extends Container {
     this.destroy();
   }
 }
-

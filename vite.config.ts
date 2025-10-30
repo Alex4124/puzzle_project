@@ -3,6 +3,7 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 import path from 'path';
 
 export default defineConfig({
+  base: '/puzzle_project/',
   plugins: [viteSingleFile()],
   resolve: {
     alias: {
@@ -10,8 +11,7 @@ export default defineConfig({
       '@models': path.resolve(__dirname, './src/models'),
       '@views': path.resolve(__dirname, './src/views'),
       '@controllers': path.resolve(__dirname, './src/controllers'),
-      '@scenes': path.resolve(__dirname, './src/scenes'),
-      '@utils': path.resolve(__dirname, './src/utils'),
+      '@services': path.resolve(__dirname, './src/services'),
     },
   },
   build: {

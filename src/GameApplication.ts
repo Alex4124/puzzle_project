@@ -1,12 +1,12 @@
 import { Application, Container } from 'pixi.js';
-import { AssetManager, AssetConfig } from '@utils/AssetManager';
-import { ResponsiveManager } from '@utils/ResponsiveManager';
-import { SceneManager } from '@scenes/SceneManager';
-import { IntroScene } from '@scenes/IntroScene';
-import { GameScene } from '@scenes/GameScene';
-import { PackshotScene } from '@scenes/PackshotScene';
+import { AssetManager, AssetConfig } from '@services/AssetManager';
+import { ResponsiveManager } from '@services/ResponsiveManager';
+import { SceneManager } from '@services/SceneManager';
+import { IntroScene } from '@views/scenes/IntroScene';
+import { GameScene } from '@views/scenes/GameScene';
+import { PackshotScene } from '@views/scenes/PackshotScene';
 import { GameConfig } from '@models/GameConfig';
-import { LogoOverlay } from '@controllers/LogoOverlay';
+import { LogoOverlay } from '@views/components/LogoOverlay';
 
 /**
  * Главный класс приложения

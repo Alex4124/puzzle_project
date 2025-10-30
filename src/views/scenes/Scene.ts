@@ -1,5 +1,5 @@
 import { Container } from 'pixi.js';
-import { GameDimensions } from '@utils/ResponsiveManager';
+import { GameDimensions } from '@services/ResponsiveManager';
 
 export abstract class Scene extends Container {
   protected dimensions: GameDimensions;
@@ -10,7 +10,10 @@ export abstract class Scene extends Container {
       width: window.innerWidth,
       height: window.innerHeight,
       scale: 1,
-      isPortrait: true,
+      isPortrait: window.innerHeight >= window.innerWidth,
+      safe: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight },
+      resolution: window.devicePixelRatio || 1,
+      dpi: window.devicePixelRatio || 1,
     };
   }
 

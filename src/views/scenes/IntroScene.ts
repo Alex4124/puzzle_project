@@ -1,10 +1,10 @@
-import { Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle, Texture, Sprite } from 'pixi.js';
 import { Scene } from './Scene';
-import { GameDimensions } from '@utils/ResponsiveManager';
-import { AssetManager } from '@utils/AssetManager';
+import { GameDimensions } from '@services/ResponsiveManager';
+import { AssetManager } from '@services/AssetManager';
 import { GameConfig } from '@models/GameConfig';
 import { ButtonController } from '@controllers/ButtonController';
-import { SceneManager } from './SceneManager';
+import { SceneManager } from '@services/SceneManager';
 
 export class IntroScene extends Scene {
   private background!: Graphics;
@@ -24,14 +24,9 @@ export class IntroScene extends Scene {
     this.createBackground();
     this.createTitle();
     this.createStartButton();
-
-    // Применяем начальные размеры
     this.resize(this.dimensions);
   }
 
-  /**
-   * Создание фона
-   */
   private createBackground(): void {
     this.background = new Graphics();
     this.background.beginFill(GameConfig.BACKGROUND_COLOR);
@@ -40,9 +35,6 @@ export class IntroScene extends Scene {
     this.addChild(this.background);
   }
 
-  /**
-   * Создание заголовка "Solve the puzzle"
-   */
   private createTitle(): void {
     const style = new TextStyle({
       fontFamily: 'Arial, sans-serif',
@@ -59,15 +51,10 @@ export class IntroScene extends Scene {
     this.addChild(this.titleText);
   }
 
-  /**
-   * Создание кнопки Start
-   */
   private createStartButton(): void {
     this.startButton = new Container();
 
     const assetManager = AssetManager.getInstance();
-
-    // Проверяем, загружен ли ассет кнопки
     if (assetManager.hasAsset(GameConfig.ASSET_START_BUTTON)) {
       const texture = assetManager.getAsset<Texture>(GameConfig.ASSET_START_BUTTON);
       const buttonSprite = new Sprite(texture);
@@ -76,7 +63,6 @@ export class IntroScene extends Scene {
       this.startButtonBaseHeight = buttonSprite.height || 1;
       this.startButton.addChild(buttonSprite);
     } else {
-      // Создаём placeholder кнопки
       const button = this.createButtonPlaceholder();
       const bounds = button.getLocalBounds();
       this.startButtonBaseWidth = bounds.width || 1;
@@ -86,7 +72,6 @@ export class IntroScene extends Scene {
 
     this.addChild(this.startButton);
 
-    // Добавляем интерактивность к кнопке
     this.buttonController = new ButtonController(this.startButton, {
       onPress: this.onStartButtonPress.bind(this),
       enablePulse: true,
@@ -95,7 +80,7 @@ export class IntroScene extends Scene {
   }
 
   private calculateStartButtonScale(dimensions: GameDimensions): number {
-    const responsiveScale = Math.min(dimensions.width / 1080, dimensions.height / 1920);
+    const responsiveScale = Math.min(dimensions.width / GameConfig.DESIGN_WIDTH, dimensions.height / GameConfig.DESIGN_HEIGHT);
     const widthLimit = this.startButtonBaseWidth > 0
       ? this.START_BUTTON_MAX_WIDTH / this.startButtonBaseWidth
       : Number.POSITIVE_INFINITY;
@@ -106,13 +91,9 @@ export class IntroScene extends Scene {
     return Math.min(responsiveScale, widthLimit, heightLimit);
   }
 
-  /**
-   * Создание placeholder'а кнопки
-   */
   private createButtonPlaceholder(): Container {
     const container = new Container();
 
-    // Зелёная кнопка с тенью
     const shadow = new Graphics();
     shadow.beginFill(0x2D7A2D, 0.5);
     shadow.drawRoundedRect(-150, -45, 300, 90, 25);
@@ -124,7 +105,6 @@ export class IntroScene extends Scene {
     button.drawRoundedRect(-150, -50, 300, 90, 25);
     button.endFill();
 
-    // Текст "Start"
     const style = new TextStyle({
       fontFamily: 'Arial, sans-serif',
       fontSize: 48,
@@ -138,49 +118,35 @@ export class IntroScene extends Scene {
     return container;
   }
 
-  /**
-   * Обработчик нажатия на кнопку Start
-   */
   private onStartButtonPress(): void {
-    console.log('Start button pressed!');
-    
-    // Переход к игровой сцене
     const sceneManager = SceneManager.getInstance();
     sceneManager.switchTo(GameConfig.SCENE_GAME);
   }
 
-  /**
-   * Обновление позиций элементов при изменении размера
-   */
   protected onResize(dimensions: GameDimensions): void {
-    const { width, height } = dimensions;
+    const { width, height, safe } = dimensions;
 
-    // Фон на весь экран
+    // Background covers full viewport
     this.background.clear();
     this.background.beginFill(GameConfig.BACKGROUND_COLOR);
     this.background.drawRect(0, 0, width, height);
     this.background.endFill();
 
-    // Заголовок в центре экрана (чуть выше середины)
-    const titleScale = Math.min(width / 1080, height / 1920);
+    // Title inside safe area
+    const titleScale = Math.min(safe.width / GameConfig.DESIGN_WIDTH, safe.height / GameConfig.DESIGN_HEIGHT);
+    this.titleText.style.wordWrapWidth = Math.max(300, Math.floor(safe.width * 0.9));
     this.titleText.style.fontSize = 80 * titleScale;
-    this.titleText.position.set(width / 2, height * 0.35);
+    this.titleText.position.set(safe.x + safe.width / 2, safe.y + safe.height * 0.35);
 
-    // Кнопка Start в центре (ниже заголовка)
-    const buttonScale = this.calculateStartButtonScale(dimensions);
-    if (this.buttonController) {
-      this.buttonController.setBaseScale(buttonScale);
-    } else {
-      this.startButton.scale.set(buttonScale);
-    }
-    this.startButton.position.set(width / 2, height * 0.55);
+    // Start button inside safe area
+    const buttonScale = this.calculateStartButtonScale({ ...dimensions, width: safe.width, height: safe.height });
+    this.buttonController?.setBaseScale(buttonScale);
+    this.startButton.position.set(safe.x + safe.width / 2, safe.y + safe.height * 0.55);
   }
 
-  /**
-   * Очистка ресурсов
-   */
   public dispose(): void {
     this.buttonController?.dispose();
     super.dispose();
   }
 }
+
