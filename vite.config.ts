@@ -2,8 +2,10 @@ import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import path from 'path';
 
+const base = process.env.NODE_ENV === 'production' ? '/puzzle_project/' : '/';
+
 export default defineConfig({
-  base: '/puzzle_project/',
+  base,
   plugins: [viteSingleFile()],
   resolve: {
     alias: {
