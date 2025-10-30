@@ -11,6 +11,11 @@ import { LogoOverlay } from '@views/components/LogoOverlay';
 /**
  * Главный класс приложения
  */
+const assetPath = (relativePath: string): string => {
+  const normalizedRelative = relativePath.replace(/^\/+/, '');
+  return `${import.meta.env.BASE_URL}${normalizedRelative}`;
+};
+
 export class GameApplication {
   private app!: Application;
   private responsiveManager!: ResponsiveManager;
@@ -84,14 +89,14 @@ export class GameApplication {
     // Список ассетов для загрузки
     const assetsList: AssetConfig[] = [
       // Основные ассеты UI
-      { name: GameConfig.ASSET_LOGO, path: '/assets/images/logo.png' },
-      { name: GameConfig.ASSET_START_BUTTON, path: '/assets/images/start_button.png' },
-      { name: GameConfig.ASSET_PLAY_BUTTON, path: '/assets/images/play_button.png' },
-      { name: GameConfig.ASSET_HAND, path: '/assets/images/hand.png' },
-      { name: GameConfig.ASSET_BACKGROUND, path: '/assets/images/background.jpg' },
+      { name: GameConfig.ASSET_LOGO, path: assetPath('assets/images/logo.png') },
+      { name: GameConfig.ASSET_START_BUTTON, path: assetPath('assets/images/start_button.png') },
+      { name: GameConfig.ASSET_PLAY_BUTTON, path: assetPath('assets/images/play_button.png') },
+      { name: GameConfig.ASSET_HAND, path: assetPath('assets/images/hand.png') },
+      { name: GameConfig.ASSET_BACKGROUND, path: assetPath('assets/images/background.jpg') },
       
       // Полное изображение пазла (будет автоматически нарезано на тайлы)
-      { name: GameConfig.ASSET_PUZZLE_COMPLETE, path: '/assets/images/fox_complete.png' },
+      { name: GameConfig.ASSET_PUZZLE_COMPLETE, path: assetPath('assets/images/fox_complete.png') },
     ];
 
     // ОПЦИОНАЛЬНО: Если у вас есть отдельные тайлы пазла, раскомментируйте этот блок
