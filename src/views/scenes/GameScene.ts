@@ -32,7 +32,8 @@ interface TileData {
  * - Может работать как с отдельными ассетами тайлов, так и разрезать целое изображение
  */
 export class GameScene extends Scene {
-  private background!: Graphics;
+  private backgroundSprite?: Sprite;
+  private backgroundFallback?: Graphics;
   private tilesContainer!: Container;
   private ghostContainer!: Container;
   private leftPanel!: Container;
@@ -211,11 +212,19 @@ export class GameScene extends Scene {
   }
 
   private createBackground(): void {
-    this.background = new Graphics();
-    this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, 100, 100);
-    this.background.endFill();
-    this.addChild(this.background);
+    const assets = AssetManager.getInstance();
+    if (assets.hasAsset(GameConfig.ASSET_BACKGROUND)) {
+      const tex = assets.getAsset<Texture>(GameConfig.ASSET_BACKGROUND);
+      this.backgroundSprite = new Sprite(tex);
+      this.backgroundSprite.anchor.set(0.5);
+      this.addChildAt(this.backgroundSprite, 0);
+    } else {
+      this.backgroundFallback = new Graphics();
+      this.backgroundFallback.beginFill(GameConfig.BACKGROUND_COLOR);
+      this.backgroundFallback.drawRect(0, 0, 100, 100);
+      this.backgroundFallback.endFill();
+      this.addChildAt(this.backgroundFallback, 0);
+    }
   }
 
   /**
@@ -500,13 +509,30 @@ export class GameScene extends Scene {
     const offsetY = safe ? safe.y : 0;
 
     // Фон на весь экран
-    this.background.clear();
-    this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, fullWidth, fullHeight);
-    this.background.endFill();
+    if (this.backgroundSprite) {
+      const texture = this.backgroundSprite.texture;
+      const baseWidth = texture.width || texture.baseTexture.realWidth || 1;
+      const baseHeight = texture.height || texture.baseTexture.realHeight || 1;
+      const scale = Math.max(fullWidth / baseWidth, fullHeight / baseHeight);
+      this.backgroundSprite.scale.set(scale);
+      this.backgroundSprite.position.set(fullWidth / 2, fullHeight / 2);
+    } else if (this.backgroundFallback) {
+      this.backgroundFallback.clear();
+      this.backgroundFallback.beginFill(GameConfig.BACKGROUND_COLOR);
+      this.backgroundFallback.drawRect(0, 0, fullWidth, fullHeight);
+      this.backgroundFallback.endFill();
+    }
 
     if (height > width) {
-      this.layoutPortrait(dimensions, width, height, offsetX, offsetY);
+      const safeRect = safe
+        ? {
+            x: safe.x ?? offsetX,
+            y: safe.y ?? offsetY,
+            width: safe.width ?? width,
+            height: safe.height ?? height,
+          }
+        : { x: offsetX, y: offsetY, width, height };
+      this.layoutPortrait(dimensions, width, height, offsetX, offsetY, safeRect);
       return;
     }
 
@@ -590,11 +616,33 @@ export class GameScene extends Scene {
     // Для большего разнообразия порядок на панели случайный
     const orderedTiles = missingTiles.slice();
     this.shuffle(orderedTiles);
-    const spacing = this.margin;
-    const startX = spacing;
+    const tileCount = orderedTiles.length;
     const scaledWidth = this.tileSize * leftTileScale;
     const scaledHeight = this.tileSize * leftTileScale;
-    const homeY = (this.leftPanelHeight - scaledHeight) / 2;
+    let spacing = this.margin;
+    let startX = this.margin;
+
+    if (tileCount > 0) {
+      const rawGap = (this.leftPanelWidth - tileCount * scaledWidth) / (tileCount + 1);
+      if (rawGap >= 0) {
+        spacing = rawGap;
+        startX = spacing;
+      } else if (tileCount > 1) {
+        const maxContentWidth = Math.max(0, this.leftPanelWidth - this.margin * 2);
+        const adjusted = (maxContentWidth - tileCount * scaledWidth) / (tileCount - 1);
+        spacing = Math.max(4, adjusted);
+        startX = Math.max(
+          this.margin,
+          (this.leftPanelWidth - (tileCount * scaledWidth + spacing * (tileCount - 1))) / 2
+        );
+      } else {
+        spacing = this.margin;
+        startX = Math.max(this.margin, (this.leftPanelWidth - scaledWidth) / 2);
+      }
+    }
+
+    const contentWidth = tileCount * scaledWidth + spacing * Math.max(0, tileCount - 1);
+    const homeY = Math.max(this.margin, (this.leftPanelHeight - scaledHeight) / 2);
 
     orderedTiles.forEach((t, idx) => {
       t.homeX = startX + idx * (scaledWidth + spacing);
@@ -606,7 +654,8 @@ export class GameScene extends Scene {
           this.leftPanelContent.addChild(t.container);
           t.container.position.copyFrom(this.leftPanelContent.toLocal(world));
         }
-        t.container.position.set(t.homeX, t.homeY);
+        const clampedY = Math.max(this.margin, Math.min(this.leftPanelHeight - scaledHeight - this.margin, t.homeY));
+        t.container.position.set(t.homeX, clampedY);
       }
     });
 
@@ -637,19 +686,19 @@ export class GameScene extends Scene {
     this.headingText.position.set(this.leftPanelWidth / 2, panelTop - 50 - headingHeight / 2);
 
     // Центрирование и масштабирование основного контейнера
-    const contentWidth = this.leftPanelWidth + this.margin + this.puzzleSize;
+    const layoutWidth = this.leftPanelWidth + this.margin + this.puzzleSize;
     // Учтём заголовок сверху и кнопку снизу вне области пазла
     const labelTop = this.headingText.position.y - this.headingText.height / 2;
     const topExtent = Math.max(0, -labelTop);
     const buttonBottom = this.playButton.position.y + (buttonHeight / 2);
     const bottomExtent = Math.max(0, buttonBottom - this.puzzleSize);
     const contentHeight = this.puzzleSize + topExtent + bottomExtent;
-    const fitScale = Math.min(width / contentWidth, height / contentHeight);
+    const fitScale = Math.min(width / layoutWidth, height / contentHeight);
     const desiredScale = Math.min(1, fitScale) * 0.9; // немного уменьшаем масштаб
     this.contentContainer.scale.set(desiredScale);
-    const extraYOffset = Math.max(this.margin, height * 0.05);
+    const extraYOffset = Math.max(this.margin * 1.5, height * 0.08);
     this.contentContainer.position.set(
-      (width - contentWidth * desiredScale) / 2 + offsetX,
+      (width - layoutWidth * desiredScale) / 2 + offsetX,
       (height - contentHeight * desiredScale) / 2 + offsetY + extraYOffset
     );
 
@@ -829,60 +878,151 @@ export class GameScene extends Scene {
     }
     if (this.handSprite) this.handSprite.alpha = 0;
   }
-
-  private layoutPortrait(dimensions: GameDimensions, width: number, height: number, offsetX: number, offsetY: number): void {
-    const missingCount = this.missingIndices.length || 4;
-
-    this.margin = Math.max(14, Math.round(Math.min(width, height) * 0.03));
-
-    let puzzleSize = Math.min(width * 0.92, height * 0.48);
-    puzzleSize = Math.max(140, puzzleSize);
-    const tileSize = puzzleSize / this.GRID_SIZE;
-
-    let leftTileScale = Math.min(this.LEFT_TILE_MAX_W / tileSize, this.LEFT_TILE_MAX_H / tileSize, 1);
-    if (leftTileScale < 0.9) {
-      leftTileScale = Math.min(1, leftTileScale * 1.1);
+  private layoutPortrait(
+    dimensions: GameDimensions,
+    width: number,
+    height: number,
+    offsetX: number,
+    offsetY: number,
+    safe: { x?: number; y?: number; width?: number; height?: number } = {
+      x: offsetX,
+      y: offsetY,
+      width,
+      height,
     }
-    leftTileScale = Math.max(0.6, leftTileScale);
+  ): void {
+    const missingCount = this.missingIndices.length || 4;
+    const safeLeft = safe.x ?? offsetX;
+    const safeTop = safe.y ?? offsetY;
+    const safeWidth = safe.width ?? width;
+    const safeHeight = safe.height ?? height;
+
+    this.margin = Math.max(14, Math.round(Math.min(safeWidth, safeHeight) * 0.03));
+
+    const spacingAfterHeading = this.margin * 2.2;
+    const spacingBetweenSections = this.margin * 2.4;
+    const spacingPanelButton = this.margin * 2.6;
+    const minButtonSpacing = this.margin * 1.5;
+    const bottomMargin = this.margin * 1.2;
 
     const tilesPerRow = Math.min(2, Math.max(1, missingCount));
     const rows = Math.max(1, Math.ceil(missingCount / tilesPerRow));
 
-    let scaledWidth = tileSize * leftTileScale;
-    let scaledHeight = tileSize * leftTileScale;
+    let puzzleSize = Math.min(safeWidth * 0.92, safeHeight * 0.5);
+    puzzleSize = Math.max(140, puzzleSize);
+    const minPuzzleSize = Math.max(120, Math.min(140, safeWidth * 0.34));
 
-    const maxPanelWidth = Math.min(this.LEFT_PANEL_MAX_W, width * 0.94);
-    let basePanelWidth = tilesPerRow * scaledWidth + this.margin * (tilesPerRow + 1);
-    if (basePanelWidth > maxPanelWidth && basePanelWidth > 0) {
-      const adjust = maxPanelWidth / basePanelWidth;
-      leftTileScale = Math.max(0.6, leftTileScale * adjust);
-      scaledWidth = tileSize * leftTileScale;
-      scaledHeight = tileSize * leftTileScale;
-      basePanelWidth = tilesPerRow * scaledWidth + this.margin * (tilesPerRow + 1);
+    const headingFontSize = Math.round(Math.max(24, Math.min(56, safeWidth * 0.09)));
+    this.headingText.style.fontSize = headingFontSize;
+    this.headingText.scale.set(1);
+    const headingBaseline = safeTop + safeHeight * 0.18 + headingFontSize / 2;
+    const headingY = Math.max(headingBaseline, safeTop + this.margin * 4.5);
+    this.headingText.position.set(safeLeft + safeWidth / 2, headingY);
+    const headingBounds = this.headingText.getLocalBounds();
+    const headingHeight = headingBounds.height || headingFontSize;
+    const headingBottom = headingY + headingHeight / 2;
+    const usableHeight = Math.max(120, safeTop + safeHeight - bottomMargin - headingBottom);
+
+    let finalLeftTileScale = 1;
+    let finalLeftPanelWidth = 0;
+    let finalLeftPanelHeight = 0;
+    let finalButtonScale = 0.35;
+    let finalButtonHeight = this.playButtonBaseHeight * finalButtonScale;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const tileSizeCandidate = puzzleSize / this.GRID_SIZE;
+
+      let leftTileScaleCandidate = Math.min(
+        this.LEFT_TILE_MAX_W / tileSizeCandidate,
+        this.LEFT_TILE_MAX_H / tileSizeCandidate,
+        1
+      );
+      if (leftTileScaleCandidate < 0.9) {
+        leftTileScaleCandidate = Math.min(1, leftTileScaleCandidate * 1.1);
+      }
+      leftTileScaleCandidate = Math.max(0.55, leftTileScaleCandidate);
+
+      let scaledWidthCandidate = tileSizeCandidate * leftTileScaleCandidate;
+      let scaledHeightCandidate = tileSizeCandidate * leftTileScaleCandidate;
+
+      const maxPanelWidth = Math.min(this.LEFT_PANEL_MAX_W, safeWidth * 0.94);
+      let basePanelWidthCandidate = tilesPerRow * scaledWidthCandidate + this.margin * (tilesPerRow + 1);
+      if (basePanelWidthCandidate > maxPanelWidth && basePanelWidthCandidate > 0) {
+        const adjust = maxPanelWidth / basePanelWidthCandidate;
+        leftTileScaleCandidate = Math.max(0.55, leftTileScaleCandidate * adjust);
+        scaledWidthCandidate = tileSizeCandidate * leftTileScaleCandidate;
+        scaledHeightCandidate = tileSizeCandidate * leftTileScaleCandidate;
+        basePanelWidthCandidate = tilesPerRow * scaledWidthCandidate + this.margin * (tilesPerRow + 1);
+      }
+
+      let leftPanelWidthCandidate = Math.min(maxPanelWidth, basePanelWidthCandidate);
+      leftPanelWidthCandidate = Math.max(leftPanelWidthCandidate, scaledWidthCandidate + this.margin * 2);
+
+      let leftPanelHeightCandidate = rows * scaledHeightCandidate + this.margin * (rows + 1);
+      leftPanelHeightCandidate = Math.max(leftPanelHeightCandidate, scaledHeightCandidate + this.margin * 2);
+
+      const baseW = this.playButtonBaseWidth || 1;
+      const baseH = this.playButtonBaseHeight || 1;
+      const widthLimit = (leftPanelWidthCandidate - this.margin * 2) / baseW;
+      const explicitMaxWidthLimit = this.PLAY_BUTTON_MAX_WIDTH / baseW;
+      const heightLimit = this.PLAY_BUTTON_MAX_HEIGHT / baseH;
+      const rawScale = Math.min(widthLimit, explicitMaxWidthLimit, heightLimit);
+      const baseScale = Math.max(0.2, isFinite(rawScale) && rawScale > 0 ? rawScale : 1);
+      const calcScale = Math.max(0.2, baseScale * 0.9);
+      const buttonScaleCandidate = Math.max(0.3, calcScale * 0.75);
+      const buttonHeightCandidate = this.playButtonBaseHeight * buttonScaleCandidate;
+
+      const requiredHeight =
+        spacingAfterHeading +
+        puzzleSize +
+        spacingBetweenSections +
+        leftPanelHeightCandidate +
+        spacingPanelButton +
+        buttonHeightCandidate;
+
+      finalLeftTileScale = leftTileScaleCandidate;
+      finalLeftPanelWidth = leftPanelWidthCandidate;
+      finalLeftPanelHeight = leftPanelHeightCandidate;
+      finalButtonScale = buttonScaleCandidate;
+      finalButtonHeight = buttonHeightCandidate;
+
+      if (requiredHeight <= usableHeight || puzzleSize <= minPuzzleSize + 1 || attempt === 5) {
+        break;
+      }
+
+      const scalableHeight = puzzleSize + leftPanelHeightCandidate + buttonHeightCandidate;
+      const availableForScalable = Math.max(
+        60,
+        usableHeight - (spacingAfterHeading + spacingBetweenSections + spacingPanelButton)
+      );
+      const factor = Math.max(0.55, Math.min(0.95, availableForScalable / Math.max(1, scalableHeight)));
+      const nextPuzzleSize = Math.max(minPuzzleSize, puzzleSize * factor);
+
+      if (Math.abs(nextPuzzleSize - puzzleSize) < 1) {
+        puzzleSize = nextPuzzleSize;
+        break;
+      }
+
+      puzzleSize = nextPuzzleSize;
     }
 
-    let leftPanelWidth = Math.min(maxPanelWidth, basePanelWidth);
-    leftPanelWidth = Math.max(leftPanelWidth, scaledWidth + this.margin * 2);
-
-    let leftPanelHeight = rows * scaledHeight + this.margin * (rows + 1);
-    leftPanelHeight = Math.max(leftPanelHeight, scaledHeight + this.margin * 2);
+    const tileSize = puzzleSize / this.GRID_SIZE;
+    const scaledWidth = tileSize * finalLeftTileScale;
+    const scaledHeight = tileSize * finalLeftTileScale;
 
     this.puzzleSize = puzzleSize;
     this.tileSize = tileSize;
-    this.leftPanelWidth = leftPanelWidth;
-    this.leftPanelHeight = leftPanelHeight;
-    this.portraitTileScale = leftTileScale;
+    this.leftPanelWidth = finalLeftPanelWidth;
+    this.leftPanelHeight = finalLeftPanelHeight;
+    this.portraitTileScale = finalLeftTileScale;
 
-    const headingFontSize = Math.round(Math.max(36, Math.min(80, width * 0.12)));
-    this.headingText.style.fontSize = headingFontSize;
-    this.headingText.scale.set(1);
-    const headingY = offsetY + this.margin * 2 + headingFontSize / 2;
-    this.headingText.position.set(offsetX + width / 2, headingY);
+    this.puzzleOriginX = safeLeft + (safeWidth - puzzleSize) / 2;
+    const puzzleTop = headingBottom + spacingAfterHeading;
+    this.puzzleOriginY = puzzleTop;
 
-    this.puzzleOriginX = offsetX + (width - puzzleSize) / 2;
-    this.puzzleOriginY = headingY + headingFontSize / 2 + this.margin * 3;
-
-    this.leftPanel.position.set(offsetX + (width - leftPanelWidth) / 2, this.puzzleOriginY + puzzleSize + this.margin * 3);
+    const leftPanelX = safeLeft + (safeWidth - this.leftPanelWidth) / 2;
+    const leftPanelY = this.puzzleOriginY + puzzleSize + spacingBetweenSections;
+    this.leftPanel.position.set(leftPanelX, leftPanelY);
     this.drawLeftPanel(this.leftPanelWidth, this.leftPanelHeight);
 
     for (const tile of this.tiles) {
@@ -899,7 +1039,7 @@ export class GameScene extends Scene {
       if (tile.placed || tile.dragging) {
         tile.container.scale.set(1);
       } else {
-        tile.container.scale.set(leftTileScale);
+        tile.container.scale.set(finalLeftTileScale);
       }
 
       tile.ghost.position.set(targetX, targetY);
@@ -915,9 +1055,10 @@ export class GameScene extends Scene {
     this.shuffle(orderedTiles);
     const spacing = this.margin;
     const perRow = Math.max(1, tilesPerRow);
-    const contentWidth = perRow * scaledWidth + spacing * (perRow + 1);
-    const startX = spacing + Math.max(0, (leftPanelWidth - contentWidth) / 2);
-    const startY = spacing;
+    const contentWidth = perRow * scaledWidth + spacing * Math.max(0, perRow - 1);
+    const startX = spacing + Math.max(0, (this.leftPanelWidth - contentWidth) / 2);
+    const rowsHeight = rows * scaledHeight + spacing * Math.max(0, rows - 1);
+    const startY = Math.max(this.margin, (this.leftPanelHeight - rowsHeight) / 2);
 
     orderedTiles.forEach((t, idx) => {
       const row = Math.floor(idx / perRow);
@@ -930,21 +1071,32 @@ export class GameScene extends Scene {
           this.leftPanelContent.addChild(t.container);
           t.container.position.copyFrom(this.leftPanelContent.toLocal(world));
         }
-        t.container.position.set(t.homeX, t.homeY);
-        t.container.scale.set(leftTileScale);
+        const clampedY = Math.max(
+          startY,
+          Math.min(this.leftPanelHeight - scaledHeight - this.margin, t.homeY)
+        );
+        t.container.position.set(t.homeX, clampedY);
+        t.container.scale.set(finalLeftTileScale);
       }
     });
 
-    const buttonScale = Math.max(0.3, this.calculatePlayButtonScale(dimensions) * 0.75);
     if (this.playButtonController) {
-      this.playButtonController.setBaseScale(buttonScale);
+      this.playButtonController.setBaseScale(finalButtonScale);
     } else {
-      this.playButton.scale.set(buttonScale);
+      this.playButton.scale.set(finalButtonScale);
     }
-    const buttonHeight = this.playButtonBaseHeight * (this.playButton.scale.y || buttonScale);
-    const buttonY = this.leftPanel.y + this.leftPanelHeight + this.margin * 2 + buttonHeight / 2;
-    const finalButtonY = Math.min(offsetY + height - this.margin - buttonHeight / 2, buttonY);
-    this.playButton.position.set(offsetX + width / 2, finalButtonY);
+
+    const panelBottom = this.leftPanel.y + this.leftPanelHeight;
+    const maxButtonCenter = safeTop + safeHeight - bottomMargin - finalButtonHeight / 2;
+    const minButtonCenter = panelBottom + minButtonSpacing + finalButtonHeight / 2;
+    let buttonCenter = panelBottom + spacingPanelButton + finalButtonHeight / 2;
+    buttonCenter = Math.max(minButtonCenter, buttonCenter);
+    buttonCenter = Math.min(maxButtonCenter, buttonCenter);
+    if (buttonCenter < panelBottom + finalButtonHeight / 2) {
+      buttonCenter = panelBottom + finalButtonHeight / 2;
+    }
+
+    this.playButton.position.set(safeLeft + safeWidth / 2, buttonCenter);
 
     this.contentContainer.scale.set(1);
     this.contentContainer.position.set(0, 0);
