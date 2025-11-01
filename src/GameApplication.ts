@@ -29,12 +29,45 @@ export class GameApplication {
   public async init(): Promise<void> {
     this.createApplication();
     this.setupResponsive();
+    await this.preloadFont();
     await this.loadAssets();
     this.createScenes();
     this.startGameLoop();
 
     // Запускаем интро-сцену
     await this.sceneManager.switchTo(GameConfig.SCENE_INTRO);
+  }
+
+  private async preloadFont(): Promise<void> {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const fontUrl = assetPath('assets/fonts/Arlon-SemiBold.ttf');
+    if ('fonts' in document) {
+      try {
+        if (!document.fonts.check('1rem "Arlon SemiBold"')) {
+          const fontFace = new FontFace('Arlon SemiBold', 'url(' + fontUrl + ')', {
+            weight: '600',
+            style: 'normal',
+            display: 'swap',
+          });
+          const loadedFace = await fontFace.load();
+          document.fonts.add(loadedFace);
+          await document.fonts.load('1rem "Arlon SemiBold"');
+        }
+      } catch (error) {
+        console.warn('Failed to load Arlon SemiBold font:', error);
+      }
+    } else {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'font';
+      link.href = fontUrl;
+      link.type = 'font/ttf';
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
   }
 
   /**
@@ -93,7 +126,7 @@ export class GameApplication {
       { name: GameConfig.ASSET_START_BUTTON, path: assetPath('assets/images/start_button.png') },
       { name: GameConfig.ASSET_PLAY_BUTTON, path: assetPath('assets/images/play_button.png') },
       { name: GameConfig.ASSET_HAND, path: assetPath('assets/images/hand.png') },
-      { name: GameConfig.ASSET_BACKGROUND, path: assetPath('assets/images/background.jpg') },
+      { name: GameConfig.ASSET_BACKGROUND, path: assetPath('assets/images/background.png') },
       
       // Полное изображение пазла (будет автоматически нарезано на тайлы)
       { name: GameConfig.ASSET_PUZZLE_COMPLETE, path: assetPath('assets/images/fox_complete.png') },

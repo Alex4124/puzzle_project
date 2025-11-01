@@ -6,7 +6,8 @@ import { AssetManager } from '@services/AssetManager';
 import { ButtonController } from '@controllers/ButtonController';
 
 export class PackshotScene extends Scene {
-  private background!: Graphics;
+  private backgroundSprite?: Sprite;
+  private backgroundFallback?: Graphics;
   private finalImage!: Sprite;
   private ctaButton!: Container;
   private ctaController!: ButtonController;
@@ -25,11 +26,19 @@ export class PackshotScene extends Scene {
   }
 
   private createBackground(): void {
-    this.background = new Graphics();
-    this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, 100, 100);
-    this.background.endFill();
-    this.addChild(this.background);
+    const assets = AssetManager.getInstance();
+    if (assets.hasAsset(GameConfig.ASSET_BACKGROUND)) {
+      const tex = assets.getAsset<Texture>(GameConfig.ASSET_BACKGROUND);
+      this.backgroundSprite = new Sprite(tex);
+      this.backgroundSprite.anchor.set(0.5);
+      this.addChildAt(this.backgroundSprite, 0);
+    } else {
+      this.backgroundFallback = new Graphics();
+      this.backgroundFallback.beginFill(GameConfig.BACKGROUND_COLOR);
+      this.backgroundFallback.drawRect(0, 0, 100, 100);
+      this.backgroundFallback.endFill();
+      this.addChildAt(this.backgroundFallback, 0);
+    }
   }
 
   private createFinalImage(): void {
@@ -64,7 +73,7 @@ export class PackshotScene extends Scene {
       g.beginFill(0x4CAF50);
       g.drawRoundedRect(-120, -45, 240, 90, 24);
       g.endFill();
-      const ts = new TextStyle({ fontSize: 42, fill: 0xffffff, fontWeight: '700', fontFamily: 'Arial' });
+      const ts = new TextStyle({ fontSize: 42, fill: 0xffffff, fontWeight: '700', fontFamily: 'Arlon SemiBold, sans-serif' });
       const t = new Text('Play', ts);
       t.anchor.set(0.5);
       this.ctaButton.addChild(g, t);
@@ -85,11 +94,21 @@ export class PackshotScene extends Scene {
   protected onResize(dimensions: GameDimensions): void {
     const { width, height, safe } = dimensions;
 
-    // Background covers viewport
-    this.background.clear();
-    this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, width, height);
-    this.background.endFill();
+    if (this.backgroundSprite) {
+      const texture = this.backgroundSprite.texture;
+      const baseWidth = texture.width || texture.baseTexture.realWidth || 1;
+      const baseHeight = texture.height || texture.baseTexture.realHeight || 1;
+      const scale = Math.max(width / baseWidth, height / baseHeight);
+      this.backgroundSprite.scale.set(scale);
+      this.backgroundSprite.position.set(width / 2, height / 2);
+    }
+
+    if (this.backgroundFallback) {
+      this.backgroundFallback.clear();
+      this.backgroundFallback.beginFill(GameConfig.BACKGROUND_COLOR);
+      this.backgroundFallback.drawRect(0, 0, width, height);
+      this.backgroundFallback.endFill();
+    }
 
     // Scale image to fit inside safe area
     if (this.finalImage) {
@@ -152,10 +171,11 @@ export class PackshotScene extends Scene {
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
     const isAndroid = /Android/.test(ua);
 
-    let url = '';
+    const isDesktop = !isIOS && !isAndroid;
+    let url = GameConfig.ANDROID_GAME_URL;
     if (isIOS) {
       url = GameConfig.IOS_GAME_URL;
-    } else if (isAndroid) {
+    } else if (isAndroid || isDesktop) {
       url = GameConfig.ANDROID_GAME_URL;
     }
 
@@ -171,4 +191,3 @@ export class PackshotScene extends Scene {
     }
   }
 }
-

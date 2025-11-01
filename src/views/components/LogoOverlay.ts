@@ -68,7 +68,7 @@ export class LogoOverlay extends Container {
 
     // Надпись
     const style = new TextStyle({
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: 'Arlon SemiBold, sans-serif',
       fontSize: 16,
       fontWeight: 'bold',
       fill: 0xFFFFFF,
@@ -84,15 +84,21 @@ export class LogoOverlay extends Container {
    * Обновление позиции/масштаба логотипа при ресайзе
    */
   public resize(dimensions: GameDimensions): void {
-    const safe = (dimensions as any).safe;
+    const safe = (dimensions as any).safe || dimensions.safe;
     const width = safe ? safe.width : dimensions.width;
     const height = safe ? safe.height : dimensions.height;
     const offsetX = safe ? safe.x : 0;
     const offsetY = safe ? safe.y : 0;
-    const scale = Math.min(width / GameConfig.DESIGN_WIDTH, height / GameConfig.DESIGN_HEIGHT) * 1.2;
+
+    const baseResponsiveScale = Math.min(width / GameConfig.DESIGN_WIDTH, height / GameConfig.DESIGN_HEIGHT) * 1.1;
+    const widthScale = this.baseWidth > 0 ? Math.min(1, width / this.baseWidth) : 1;
+    const heightScale = this.baseHeight > 0 ? Math.min(1, height / this.baseHeight) : 1;
+    const scale = Math.max(0.25, Math.min(baseResponsiveScale, widthScale, heightScale));
 
     this.logoHolder.scale.set(scale);
-    this.position.set(offsetX + 10, offsetY + 10);
+
+    const verticalMargin = Math.max(12, height * 0.02);
+    this.position.set(offsetX, offsetY + verticalMargin);
   }
 
   public dispose(): void {

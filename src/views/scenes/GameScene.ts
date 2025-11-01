@@ -77,6 +77,7 @@ export class GameScene extends Scene {
   private puzzleOriginX = 0;
   private puzzleOriginY = 0;
   private margin = 16;
+  private portraitTileScale = 1;
 
   constructor() {
     super();
@@ -504,7 +505,13 @@ export class GameScene extends Scene {
     this.background.drawRect(0, 0, fullWidth, fullHeight);
     this.background.endFill();
 
+    if (height > width) {
+      this.layoutPortrait(dimensions, width, height, offsetX, offsetY);
+      return;
+    }
+
     // Адаптивный лэйаут
+    this.portraitTileScale = 1;
     this.margin = Math.max(16, Math.round(Math.min(width, height) * 0.02));
     let puzzleSize = Math.min(width * 0.75, height * 0.85);
     let tileSize = puzzleSize / this.GRID_SIZE;
@@ -624,7 +631,7 @@ export class GameScene extends Scene {
     const widthScale = Math.min(1, maxHeadingWidth / localHeadingWidth);
     const maxHeadingHeight = Math.max(1, panelTop - 50);
     const heightScale = Math.min(1, maxHeadingHeight / localHeadingHeight);
-    const headingScale = Math.max(0.2, Math.min(widthScale, heightScale));
+    const headingScale = Math.max(0.2, Math.min(widthScale, heightScale)) * 0.85;
     this.headingText.scale.set(headingScale);
     const headingHeight = localHeadingHeight * headingScale;
     this.headingText.position.set(this.leftPanelWidth / 2, panelTop - 50 - headingHeight / 2);
@@ -640,9 +647,10 @@ export class GameScene extends Scene {
     const fitScale = Math.min(width / contentWidth, height / contentHeight);
     const desiredScale = Math.min(1, fitScale) * 0.9; // немного уменьшаем масштаб
     this.contentContainer.scale.set(desiredScale);
+    const extraYOffset = Math.max(this.margin, height * 0.05);
     this.contentContainer.position.set(
       (width - contentWidth * desiredScale) / 2 + offsetX,
-      (height - contentHeight * desiredScale) / 2 + offsetY
+      (height - contentHeight * desiredScale) / 2 + offsetY + extraYOffset
     );
 
     // Обновим/запустим подсказку рукой, если пользователь ещё не взаимодействовал
@@ -712,6 +720,13 @@ export class GameScene extends Scene {
    */
   private getLeftTileScale(): number {
     if (this.tileSize <= 0) return 1;
+    const dims = this.dimensions;
+    const safe = (dims as any).safe;
+    const currentWidth = safe ? safe.width : dims.width;
+    const currentHeight = safe ? safe.height : dims.height;
+    if (currentHeight > currentWidth) {
+      return this.portraitTileScale;
+    }
     return Math.min(this.LEFT_TILE_MAX_W / this.tileSize, this.LEFT_TILE_MAX_H / this.tileSize, 1);
   }
 
@@ -759,7 +774,8 @@ export class GameScene extends Scene {
     const explicitMaxWidthLimit = this.PLAY_BUTTON_MAX_WIDTH / baseW; // 387
     const heightLimit = this.PLAY_BUTTON_MAX_HEIGHT / baseH; // 175
     const scale = Math.min(widthLimit, explicitMaxWidthLimit, heightLimit);
-    return Math.max(0.2, isFinite(scale) && scale > 0 ? scale : 1);
+    const baseScale = Math.max(0.2, isFinite(scale) && scale > 0 ? scale : 1);
+    return Math.max(0.2, baseScale * 0.9);
   }
 
   private refreshHandGuide(): void {
@@ -812,5 +828,127 @@ export class GameScene extends Scene {
       this.handTimeline = undefined;
     }
     if (this.handSprite) this.handSprite.alpha = 0;
+  }
+
+  private layoutPortrait(dimensions: GameDimensions, width: number, height: number, offsetX: number, offsetY: number): void {
+    const missingCount = this.missingIndices.length || 4;
+
+    this.margin = Math.max(14, Math.round(Math.min(width, height) * 0.03));
+
+    let puzzleSize = Math.min(width * 0.92, height * 0.48);
+    puzzleSize = Math.max(140, puzzleSize);
+    const tileSize = puzzleSize / this.GRID_SIZE;
+
+    let leftTileScale = Math.min(this.LEFT_TILE_MAX_W / tileSize, this.LEFT_TILE_MAX_H / tileSize, 1);
+    if (leftTileScale < 0.9) {
+      leftTileScale = Math.min(1, leftTileScale * 1.1);
+    }
+    leftTileScale = Math.max(0.6, leftTileScale);
+
+    const tilesPerRow = Math.min(2, Math.max(1, missingCount));
+    const rows = Math.max(1, Math.ceil(missingCount / tilesPerRow));
+
+    let scaledWidth = tileSize * leftTileScale;
+    let scaledHeight = tileSize * leftTileScale;
+
+    const maxPanelWidth = Math.min(this.LEFT_PANEL_MAX_W, width * 0.94);
+    let basePanelWidth = tilesPerRow * scaledWidth + this.margin * (tilesPerRow + 1);
+    if (basePanelWidth > maxPanelWidth && basePanelWidth > 0) {
+      const adjust = maxPanelWidth / basePanelWidth;
+      leftTileScale = Math.max(0.6, leftTileScale * adjust);
+      scaledWidth = tileSize * leftTileScale;
+      scaledHeight = tileSize * leftTileScale;
+      basePanelWidth = tilesPerRow * scaledWidth + this.margin * (tilesPerRow + 1);
+    }
+
+    let leftPanelWidth = Math.min(maxPanelWidth, basePanelWidth);
+    leftPanelWidth = Math.max(leftPanelWidth, scaledWidth + this.margin * 2);
+
+    let leftPanelHeight = rows * scaledHeight + this.margin * (rows + 1);
+    leftPanelHeight = Math.max(leftPanelHeight, scaledHeight + this.margin * 2);
+
+    this.puzzleSize = puzzleSize;
+    this.tileSize = tileSize;
+    this.leftPanelWidth = leftPanelWidth;
+    this.leftPanelHeight = leftPanelHeight;
+    this.portraitTileScale = leftTileScale;
+
+    const headingFontSize = Math.round(Math.max(36, Math.min(80, width * 0.12)));
+    this.headingText.style.fontSize = headingFontSize;
+    this.headingText.scale.set(1);
+    const headingY = offsetY + this.margin * 2 + headingFontSize / 2;
+    this.headingText.position.set(offsetX + width / 2, headingY);
+
+    this.puzzleOriginX = offsetX + (width - puzzleSize) / 2;
+    this.puzzleOriginY = headingY + headingFontSize / 2 + this.margin * 3;
+
+    this.leftPanel.position.set(offsetX + (width - leftPanelWidth) / 2, this.puzzleOriginY + puzzleSize + this.margin * 3);
+    this.drawLeftPanel(this.leftPanelWidth, this.leftPanelHeight);
+
+    for (const tile of this.tiles) {
+      const targetX = this.puzzleOriginX + tile.col * this.tileSize;
+      const targetY = this.puzzleOriginY + tile.row * this.tileSize;
+      tile.targetX = targetX;
+      tile.targetY = targetY;
+
+      tile.image.width = this.tileSize;
+      tile.image.height = this.tileSize;
+      tile.ghost.width = this.tileSize;
+      tile.ghost.height = this.tileSize;
+
+      if (tile.placed || tile.dragging) {
+        tile.container.scale.set(1);
+      } else {
+        tile.container.scale.set(leftTileScale);
+      }
+
+      tile.ghost.position.set(targetX, targetY);
+      tile.ghost.visible = !tile.placed;
+
+      if (tile.placed && !tile.dragging) {
+        tile.container.position.set(targetX, targetY);
+      }
+    }
+
+    const missingTiles = this.tiles.filter(t => !t.placed);
+    const orderedTiles = missingTiles.slice();
+    this.shuffle(orderedTiles);
+    const spacing = this.margin;
+    const perRow = Math.max(1, tilesPerRow);
+    const contentWidth = perRow * scaledWidth + spacing * (perRow + 1);
+    const startX = spacing + Math.max(0, (leftPanelWidth - contentWidth) / 2);
+    const startY = spacing;
+
+    orderedTiles.forEach((t, idx) => {
+      const row = Math.floor(idx / perRow);
+      const col = idx % perRow;
+      t.homeX = startX + col * (scaledWidth + spacing);
+      t.homeY = startY + row * (scaledHeight + spacing);
+      if (!t.dragging && !t.placed) {
+        if (t.container.parent !== this.leftPanelContent) {
+          const world = t.container.getGlobalPosition(new Point());
+          this.leftPanelContent.addChild(t.container);
+          t.container.position.copyFrom(this.leftPanelContent.toLocal(world));
+        }
+        t.container.position.set(t.homeX, t.homeY);
+        t.container.scale.set(leftTileScale);
+      }
+    });
+
+    const buttonScale = Math.max(0.3, this.calculatePlayButtonScale(dimensions) * 0.75);
+    if (this.playButtonController) {
+      this.playButtonController.setBaseScale(buttonScale);
+    } else {
+      this.playButton.scale.set(buttonScale);
+    }
+    const buttonHeight = this.playButtonBaseHeight * (this.playButton.scale.y || buttonScale);
+    const buttonY = this.leftPanel.y + this.leftPanelHeight + this.margin * 2 + buttonHeight / 2;
+    const finalButtonY = Math.min(offsetY + height - this.margin - buttonHeight / 2, buttonY);
+    this.playButton.position.set(offsetX + width / 2, finalButtonY);
+
+    this.contentContainer.scale.set(1);
+    this.contentContainer.position.set(0, 0);
+
+    this.refreshHandGuide();
   }
 }

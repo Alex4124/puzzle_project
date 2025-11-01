@@ -6,10 +6,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Magic Jigsaw Puzzles</title>
   <style>
+    @font-face {
+      font-family: 'Arlon SemiBold';
+      src: url('/assets/fonts/Arlon-SemiBold.ttf') format('truetype');
+      font-weight: 600;
+      font-style: normal;
+      font-display: swap;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      font-family: 'Arlon SemiBold', sans-serif;
     }
 
     html, body {
@@ -17,6 +26,7 @@
       height: 100%;
       overflow: hidden;
       background-color: #000;
+      font-family: 'Arlon SemiBold', sans-serif;
     }
 
     #game-container {

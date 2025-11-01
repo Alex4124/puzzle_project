@@ -7,7 +7,8 @@ import { ButtonController } from '@controllers/ButtonController';
 import { SceneManager } from '@services/SceneManager';
 
 export class IntroScene extends Scene {
-  private background!: Graphics;
+  private backgroundSprite?: Sprite;
+  private backgroundFallback?: Graphics;
   private titleText!: Text;
   private startButton!: Container;
   private buttonController!: ButtonController;
@@ -15,6 +16,11 @@ export class IntroScene extends Scene {
   private startButtonBaseHeight = 1;
   private readonly START_BUTTON_MAX_WIDTH = 400;
   private readonly START_BUTTON_MAX_HEIGHT = 170;
+  private readonly TITLE_BASE_FONT_SIZE = 110;
+  private readonly TITLE_SCALE_BONUS = 0.9;
+  private readonly START_BUTTON_SCALE_FACTOR = 0.65;
+  private readonly START_BUTTON_MIN_SCALE = 0.35;
+  private readonly START_BUTTON_VERTICAL_OFFSET = 0.30;
 
   constructor() {
     super();
@@ -28,17 +34,26 @@ export class IntroScene extends Scene {
   }
 
   private createBackground(): void {
-    this.background = new Graphics();
-    this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, 100, 100);
-    this.background.endFill();
-    this.addChild(this.background);
+    const assetManager = AssetManager.getInstance();
+
+    if (assetManager.hasAsset(GameConfig.ASSET_BACKGROUND)) {
+      const texture = assetManager.getAsset<Texture>(GameConfig.ASSET_BACKGROUND);
+      this.backgroundSprite = new Sprite(texture);
+      this.backgroundSprite.anchor.set(0.5);
+      this.addChildAt(this.backgroundSprite, 0);
+    } else {
+      this.backgroundFallback = new Graphics();
+      this.backgroundFallback.beginFill(GameConfig.BACKGROUND_COLOR);
+      this.backgroundFallback.drawRect(0, 0, 100, 100);
+      this.backgroundFallback.endFill();
+      this.addChildAt(this.backgroundFallback, 0);
+    }
   }
 
   private createTitle(): void {
     const style = new TextStyle({
-      fontFamily: 'Arial, sans-serif',
-      fontSize: 80,
+      fontFamily: 'Arlon SemiBold, sans-serif',
+      fontSize: this.TITLE_BASE_FONT_SIZE,
       fontWeight: 'bold',
       fill: GameConfig.PRIMARY_COLOR,
       align: 'center',
@@ -106,7 +121,7 @@ export class IntroScene extends Scene {
     button.endFill();
 
     const style = new TextStyle({
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: 'Arlon SemiBold, sans-serif',
       fontSize: 48,
       fontWeight: 'bold',
       fill: 0xFFFFFF,
@@ -126,22 +141,49 @@ export class IntroScene extends Scene {
   protected onResize(dimensions: GameDimensions): void {
     const { width, height, safe } = dimensions;
 
-    // Background covers full viewport
-    this.background.clear();
-    this.background.beginFill(GameConfig.BACKGROUND_COLOR);
-    this.background.drawRect(0, 0, width, height);
-    this.background.endFill();
+    if (this.backgroundSprite) {
+      const texture = this.backgroundSprite.texture;
+      const baseWidth = texture.width || texture.baseTexture.realWidth || 1;
+      const baseHeight = texture.height || texture.baseTexture.realHeight || 1;
+      const scale = Math.max(width / baseWidth, height / baseHeight);
+      this.backgroundSprite.scale.set(scale);
+      this.backgroundSprite.position.set(width / 2, height / 2);
+    }
 
-    // Title inside safe area
+    if (this.backgroundFallback) {
+      this.backgroundFallback.clear();
+      this.backgroundFallback.beginFill(GameConfig.BACKGROUND_COLOR);
+      this.backgroundFallback.drawRect(0, 0, width, height);
+      this.backgroundFallback.endFill();
+    }
+
+    const centerX = safe.x + safe.width / 2;
+    const centerY = safe.y + safe.height / 2;
+    const margin = Math.max(16, Math.round(Math.min(safe.width, safe.height) * 0.025));
+
+    // Title centered and scaled up
     const titleScale = Math.min(safe.width / GameConfig.DESIGN_WIDTH, safe.height / GameConfig.DESIGN_HEIGHT);
-    this.titleText.style.wordWrapWidth = Math.max(300, Math.floor(safe.width * 0.9));
-    this.titleText.style.fontSize = 80 * titleScale;
-    this.titleText.position.set(safe.x + safe.width / 2, safe.y + safe.height * 0.35);
+    const fontSizeUnclamped = this.TITLE_BASE_FONT_SIZE * Math.max(0.7, titleScale * this.TITLE_SCALE_BONUS);
+    const maxFontSize = this.TITLE_BASE_FONT_SIZE * this.TITLE_SCALE_BONUS;
+    const computedFontSize = Math.min(maxFontSize, Math.max(56, fontSizeUnclamped));
 
-    // Start button inside safe area
-    const buttonScale = this.calculateStartButtonScale({ ...dimensions, width: safe.width, height: safe.height });
-    this.buttonController?.setBaseScale(buttonScale);
-    this.startButton.position.set(safe.x + safe.width / 2, safe.y + safe.height * 0.55);
+    this.titleText.style.wordWrapWidth = Math.max(300, Math.floor(safe.width * 0.8));
+    this.titleText.style.fontSize = computedFontSize;
+    this.titleText.position.set(centerX, centerY);
+
+    // Start button: slightly smaller and positioned 10% below the title
+    const responsiveScale = this.calculateStartButtonScale({ ...dimensions, width: safe.width, height: safe.height });
+    const adjustedScale = Math.max(this.START_BUTTON_MIN_SCALE, responsiveScale * this.START_BUTTON_SCALE_FACTOR);
+    const reducedScale = Math.max(this.START_BUTTON_MIN_SCALE, adjustedScale * 0.75);
+    this.buttonController?.setBaseScale(reducedScale);
+
+    const buttonHeight = this.startButtonBaseHeight * reducedScale;
+    const verticalOffset = safe.height * this.START_BUTTON_VERTICAL_OFFSET;
+    const desiredButtonY = centerY + verticalOffset;
+    const maxButtonY = safe.y + safe.height - margin - buttonHeight / 2;
+    const finalButtonY = Math.min(maxButtonY, desiredButtonY);
+
+    this.startButton.position.set(centerX, finalButtonY);
   }
 
   public dispose(): void {
@@ -149,4 +191,3 @@ export class IntroScene extends Scene {
     super.dispose();
   }
 }
-
