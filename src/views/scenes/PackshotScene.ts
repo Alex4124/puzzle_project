@@ -110,6 +110,8 @@ export class PackshotScene extends Scene {
       this.backgroundFallback.endFill();
     }
 
+    const isPortrait = safe.height >= safe.width;
+
     // Scale image to fit inside safe area
     if (this.finalImage) {
       const maxW = safe.width * 0.9;
@@ -122,7 +124,8 @@ export class PackshotScene extends Scene {
     // CTA placement and scale within safe area
     if (this.ctaButton) {
       const margin = Math.max(12, Math.round(Math.min(safe.width, safe.height) * 0.02));
-      const SPACING_X = Math.max(24, Math.min(80, Math.round(safe.width * 0.04)));
+      const spacingX = Math.max(24, Math.min(80, Math.round(safe.width * 0.04)));
+      const spacingY = Math.max(margin * 1.5, safe.height * 0.04);
 
       const baseW = this.ctaBaseW || 1;
       const baseH = this.ctaBaseH || 1;
@@ -131,6 +134,9 @@ export class PackshotScene extends Scene {
       const scaleUpper = Math.min(scaleByViewportW, scaleByViewportH, 1);
       const MIN_SCALE = 0.25;
       let scale = Math.max(MIN_SCALE, scaleUpper);
+      if (isPortrait) {
+        scale = Math.max(MIN_SCALE, Math.min(scale, 0.75));
+      }
 
       const imgCenterX = safe.x + safe.width / 2;
       const imgCenterY = safe.y + safe.height / 2;
@@ -140,28 +146,44 @@ export class PackshotScene extends Scene {
       const imageBottom = imgCenterY + imgH / 2;
 
       const availableRight = safe.x + safe.width - margin - imgRight;
-      const desiredBtnW = baseW * scale;
-      if (availableRight < SPACING_X + desiredBtnW) {
-        const allowedW = Math.max(0, availableRight - SPACING_X);
-        const fitScale = allowedW > 0 ? allowedW / baseW : MIN_SCALE;
-        scale = Math.max(MIN_SCALE, Math.min(scale, fitScale));
+      if (!isPortrait) {
+        const requiredSpace = Math.max(0, availableRight - spacingX * 2);
+        if (requiredSpace > 0) {
+          const fitScale = requiredSpace / baseW;
+          scale = Math.max(MIN_SCALE, Math.min(scale, fitScale));
+        }
       }
 
       this.ctaController.setBaseScale(scale);
       const w = baseW * scale;
       const h = baseH * scale;
 
-      let targetX = Math.max(imgRight + SPACING_X + w / 2, safe.x + safe.width - margin - w / 2);
-      const bottomCandidate = safe.y + safe.height - margin - h / 2;
-      let targetY = Math.min(bottomCandidate, imageBottom - h / 2);
+      let targetX = safe.x + safe.width / 2;
+      let targetY = safe.y + safe.height / 2;
 
-      const minX = safe.x + margin + w / 2;
-      const maxX = safe.x + safe.width - margin - w / 2;
+      if (isPortrait) {
+        const baseY = imageBottom + spacingY + h / 2;
+        const maxY = safe.y + safe.height - margin - h / 2;
+        targetX = safe.x + safe.width / 2;
+        targetY = Math.min(maxY, baseY);
+      } else {
+        const totalSpace = Math.max(0, availableRight);
+        if (w + spacingX * 2 <= totalSpace) {
+          const remaining = totalSpace - (w + spacingX * 2);
+          const gap = spacingX + remaining / 2;
+          targetX = imgRight + gap + w / 2;
+        } else if (w <= totalSpace) {
+          const gap = (totalSpace - w) / 2;
+          targetX = imgRight + gap + w / 2;
+        } else {
+          targetX = safe.x + safe.width - margin - w / 2;
+        }
+        const bottomCandidate = safe.y + safe.height - margin - h / 2;
+        targetY = Math.min(bottomCandidate, imageBottom - h / 2);
+      }
+
       const minY = safe.y + margin + h / 2;
-      const maxY = safe.y + safe.height - margin - h / 2;
-      targetX = Math.max(minX, Math.min(maxX, targetX));
-      targetY = Math.max(minY, Math.min(maxY, targetY));
-
+      targetY = Math.max(minY, targetY);
       this.ctaButton.position.set(targetX, targetY);
     }
   }
